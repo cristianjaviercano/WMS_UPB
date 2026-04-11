@@ -1,0 +1,11 @@
+{
+  "build": {
+    "builder": "NIX",
+    "nix": {
+      "channel": "python-3.11"
+    }
+  },
+  "run": {
+    "command": "streamlit run streamlit_app.py --server.port=$PORT --server.address=0.0.0.0"
+  }
+}
