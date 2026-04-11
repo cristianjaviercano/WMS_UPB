@@ -186,6 +186,36 @@ def init_database():
         )
     """)
 
+    # Tabla de proveedores
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS proveedores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nit TEXT UNIQUE,
+            nombre TEXT NOT NULL,
+            contacto TEXT,
+            telefono TEXT,
+            email TEXT,
+            direccion TEXT,
+            ciudad TEXT,
+            estado TEXT DEFAULT 'activo'
+        )
+    """)
+
+    # Tabla de clientes
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS clientes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nit TEXT UNIQUE,
+            nombre TEXT NOT NULL,
+            contacto TEXT,
+            telefono TEXT,
+            email TEXT,
+            direccion TEXT,
+            ciudad TEXT,
+            estado TEXT DEFAULT 'activo'
+        )
+    """)
+
     # Insertar ubicaciones de ejemplo (Almacén pequeño)
     c.execute("SELECT COUNT(*) FROM ubicaciones")
     if c.fetchone()[0] == 0:
@@ -358,6 +388,118 @@ def init_database():
                 ),
             )
 
+        # Insertar proveedores de ejemplo
+        c.execute("SELECT COUNT(*) FROM proveedores")
+        if c.fetchone()[0] == 0:
+            proveedores_ejemplo = [
+                (
+                    "101234567",
+                    "HP Colombia",
+                    "Carlos Martínez",
+                    "+57 310 1234567",
+                    "cmartinez@hp.com.co",
+                    "Bogotá",
+                    "Bogotá",
+                ),
+                (
+                    "101234568",
+                    "Logitech",
+                    "María López",
+                    "+57 310 2345678",
+                    "mlopez@logitech.com",
+                    "Medellín",
+                    "Medellín",
+                ),
+                (
+                    "101234569",
+                    "Samsung",
+                    "Juan Pérez",
+                    "+57 310 3456789",
+                    "jperez@samsung.com",
+                    "Cali",
+                    "Cali",
+                ),
+                (
+                    "101234570",
+                    "Kingston",
+                    "Ana Gómez",
+                    "+57 310 4567890",
+                    "agomez@kingston.com",
+                    "Bogotá",
+                    "Bogotá",
+                ),
+                (
+                    "101234571",
+                    "JBL Audio",
+                    "Luis Rodríguez",
+                    "+57 310 5678901",
+                    "lrodriguez@jbl.com",
+                    "Barranquilla",
+                    "Barranquilla",
+                ),
+            ]
+            for prov in proveedores_ejemplo:
+                c.execute(
+                    "INSERT INTO proveedores (nit, nombre, contacto, telefono, email, direccion, ciudad) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    prov,
+                )
+
+        # Insertar clientes de ejemplo
+        c.execute("SELECT COUNT(*) FROM clientes")
+        if c.fetchone()[0] == 0:
+            clientes_ejemplo = [
+                (
+                    "801234567",
+                    "Empresa ABC",
+                    "Pedro Silva",
+                    "+57 310 1112233",
+                    "psilva@abc.com",
+                    "Cra 10 #20-30",
+                    "Bogotá",
+                ),
+                (
+                    "801234568",
+                    "Corporación XYZ",
+                    "Laura Torres",
+                    "+57 310 2223344",
+                    "ltorres@xyz.com",
+                    "Cra 50 #5-60",
+                    "Medellín",
+                ),
+                (
+                    "801234569",
+                    "Industrias 123",
+                    "Jorge Mendoza",
+                    "+57 310 3334455",
+                    "jmendoza@industrias.com",
+                    "Calle 20 #10-50",
+                    "Cali",
+                ),
+                (
+                    "801234570",
+                    "Tech Solutions",
+                    "Sofia Ruiz",
+                    "+57 310 4445566",
+                    "sruiz@techsolutions.com",
+                    "Av 80 #30-20",
+                    "Bogotá",
+                ),
+                (
+                    "801234571",
+                    "Distribuidora Norte",
+                    "Mario Castro",
+                    "+57 310 5556677",
+                    "mcastro@distrnorte.com",
+                    "Cra 40 #15-80",
+                    "Barranquilla",
+                ),
+            ]
+            for cli in clientes_ejemplo:
+                c.execute(
+                    "INSERT INTO clientes (nit, nombre, contacto, telefono, email, direccion, ciudad) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    cli,
+                )
+
     conn.commit()
     conn.close()
 
@@ -393,6 +535,52 @@ def get_movimientos(limit=100):
     )
     conn.close()
     return df
+
+
+def get_proveedores():
+    conn = get_connection()
+    df = pd.read_sql("SELECT * FROM proveedores ORDER BY nombre", conn)
+    conn.close()
+    return df
+
+
+def get_clientes():
+    conn = get_connection()
+    df = pd.read_sql("SELECT * FROM clientes ORDER BY nombre", conn)
+    conn.close()
+    return df
+
+
+def agregar_proveedor(nit, nombre, contacto, telefono, email, direccion, ciudad):
+    conn = get_connection()
+    c = conn.cursor()
+    try:
+        c.execute(
+            "INSERT INTO proveedores (nit, nombre, contacto, telefono, email, direccion, ciudad) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (nit, nombre, contacto, telefono, email, direccion, ciudad),
+        )
+        conn.commit()
+        return True, "Proveedor agregado correctamente"
+    except sqlite3.IntegrityError:
+        return False, "El NIT ya existe"
+    finally:
+        conn.close()
+
+
+def agregar_cliente(nit, nombre, contacto, telefono, email, direccion, ciudad):
+    conn = get_connection()
+    c = conn.cursor()
+    try:
+        c.execute(
+            "INSERT INTO clientes (nit, nombre, contacto, telefono, email, direccion, ciudad) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (nit, nombre, contacto, telefono, email, direccion, ciudad),
+        )
+        conn.commit()
+        return True, "Cliente agregado correctamente"
+    except sqlite3.IntegrityError:
+        return False, "El NIT ya existe"
+    finally:
+        conn.close()
 
 
 def get_ubicaciones_disponibles():
@@ -755,6 +943,114 @@ def show_productos():
                         ubicacion_final,
                         costo,
                         proveedor,
+                    )
+                    if success:
+                        st.success(msg)
+                        st.balloons()
+                    else:
+                        st.error(msg)
+
+
+# ============================================================================
+# PROVEEDORES
+# ============================================================================
+def show_proveedores():
+    st.title("🏢 Gestión de Proveedores")
+    st.markdown("Administra el catálogo de proveedores.")
+
+    tab1, tab2 = st.tabs(["📋 Ver Proveedores", "➕ Agregar Proveedor"])
+
+    with tab1:
+        proveedores = get_proveedores()
+
+        if len(proveedores) == 0:
+            st.info("No hay proveedores registrados.")
+        else:
+            st.dataframe(proveedores, use_container_width=True, hide_index=True)
+            st.info(f"Total: {len(proveedores)} proveedores")
+
+    with tab2:
+        st.markdown("### Nuevo Proveedor")
+        with st.form("nuevo_proveedor"):
+            col1, col2 = st.columns(2)
+            with col1:
+                nit = st.text_input("NIT *", placeholder="101234567")
+                nombre = st.text_input("Nombre *", placeholder="Nombre de la empresa")
+                contacto = st.text_input(
+                    "Persona de contacto", placeholder="Nombre del contacto"
+                )
+            with col2:
+                telefono = st.text_input("Teléfono", placeholder="+57 310 1234567")
+                email = st.text_input("Email", placeholder="correo@empresa.com")
+                ciudad = st.selectbox(
+                    "Ciudad",
+                    ["Bogotá", "Medellín", "Cali", "Barranquilla", "Cartagena", "Otra"],
+                )
+
+            direccion = st.text_input(
+                "Dirección", placeholder="Dirección de la empresa"
+            )
+
+            submit = st.form_submit_button("💾 Guardar Proveedor")
+
+            if submit:
+                if nit and nombre:
+                    success, msg = agregar_proveedor(
+                        nit, nombre, contacto, telefono, email, direccion, ciudad
+                    )
+                    if success:
+                        st.success(msg)
+                        st.balloons()
+                    else:
+                        st.error(msg)
+
+
+# ============================================================================
+# CLIENTES
+# ============================================================================
+def show_clientes():
+    st.title("👥 Gestión de Clientes")
+    st.markdown("Administra el catálogo de clientes.")
+
+    tab1, tab2 = st.tabs(["📋 Ver Clientes", "➕ Agregar Cliente"])
+
+    with tab1:
+        clientes = get_clientes()
+
+        if len(clientes) == 0:
+            st.info("No hay clientes registrados.")
+        else:
+            st.dataframe(clientes, use_container_width=True, hide_index=True)
+            st.info(f"Total: {len(clientes)} clientes")
+
+    with tab2:
+        st.markdown("### Nuevo Cliente")
+        with st.form("nuevo_cliente"):
+            col1, col2 = st.columns(2)
+            with col1:
+                nit = st.text_input("NIT *", placeholder="801234567")
+                nombre = st.text_input("Nombre *", placeholder="Nombre de la empresa")
+                contacto = st.text_input(
+                    "Persona de contacto", placeholder="Nombre del contacto"
+                )
+            with col2:
+                telefono = st.text_input("Teléfono", placeholder="+57 310 1234567")
+                email = st.text_input("Email", placeholder="correo@empresa.com")
+                ciudad = st.selectbox(
+                    "Ciudad",
+                    ["Bogotá", "Medellín", "Cali", "Barranquilla", "Cartagena", "Otra"],
+                )
+
+            direccion = st.text_input(
+                "Dirección", placeholder="Dirección de la empresa"
+            )
+
+            submit = st.form_submit_button("💾 Guardar Cliente")
+
+            if submit:
+                if nit and nombre:
+                    success, msg = agregar_cliente(
+                        nit, nombre, contacto, telefono, email, direccion, ciudad
                     )
                     if success:
                         st.success(msg)
@@ -1154,9 +1450,9 @@ def show_kpis():
 
     kpis_data = {
         "Mes": ["Ene", "Feb", "Mar", "Abr", "May", "Jun"],
-        "Accuracy": [96.0, 96.5, 97.0, 97.5, 98.0],
-        "Pedidos Perfectos": [94.0, 94.5, 95.0, 95.5, 96.0],
-        "OTIF": [91.0, 92.0, 92.5, 93.5, 94.0],
+        "Accuracy": [96.0, 96.5, 97.0, 97.5, 98.0, 98.5],
+        "Pedidos Perfectos": [94.0, 94.5, 95.0, 95.5, 96.0, 96.2],
+        "OTIF": [91.0, 92.0, 92.5, 93.5, 94.0, 94.8],
     }
     df_kpis = pd.DataFrame(kpis_data)
 
@@ -1182,6 +1478,8 @@ def main():
         "🏠 Inicio",
         "📊 Dashboard",
         "📦 Productos",
+        "🏢 Proveedores",
+        "👥 Clientes",
         "📍 Ubicaciones",
         "🔄 Movimientos",
         "📥 Simulador Recepción",
@@ -1208,6 +1506,10 @@ def main():
         show_dashboard()
     elif choice == "📦 Productos":
         show_productos()
+    elif choice == "🏢 Proveedores":
+        show_proveedores()
+    elif choice == "👥 Clientes":
+        show_clientes()
     elif choice == "📍 Ubicaciones":
         show_ubicaciones()
     elif choice == "🔄 Movimientos":
