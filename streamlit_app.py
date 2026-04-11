@@ -1,26 +1,126 @@
 """
-WMS UPB - Warehouse Management System Educational
+WMS UPB - Sistema de Gestión de Almacenes Educativo
 ===================================================
-Aplicación educativa para la gestión de almacenes
-Universidad Pontificia Boliviana - Ingeniería Industrial
+Laboratorio práctico para aprender gestión de almacenes y logística.
 
-Autor: Ing. Cristian Javier Cano Mogollon
-Curso: Gestión de Almacenamiento
+Universidad Pontificia Boliviana - Ingeniería Industrial
+Profesor: Ing. Cristian Javier Cano Mogollon
+
+Este es un sistema educativo diseñado para:
+- Enseñar los conceptos fundamentales de un WMS
+- Practicar transacciones logísticas en un ambiente seguro
+- Entender los KPIs logísticos y cómo se calculan
+- Preparar a los estudiantes para entornos industriales reales
 """
 
 import streamlit as st
 import pandas as pd
 import sqlite3
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 import plotly.express as px
 import plotly.graph_objects as go
+
+# ============================================================================
+# CONSTANTES EDUCATIVAS - EXPLICACIONES
+# ============================================================================
+INFO_WMS = """
+## 🏭 ¿Qué es un WMS?
+
+Un **Sistema de Gestión de Almacenes (WMS)** es un software que controla todas las 
+operaciones dentro de un almacén. Su objetivo principal es optimizar el almacenamiento y 
+la distribución de productos.
+
+### Funciones principales de un WMS:
+1. **Recepción** - Controlar el ingreso de mercancía
+2. **Almacenamiento** - Asignar ubicaciones óptimas
+3. **Inventario** - Mantener registro preciso de las existencias
+4. **Preparación de pedidos** - Gestionar Picking y Packing
+5. **Despacho** - Controlar salida de productos
+6. **Reporting** - Generar métricas y KPIs
+
+### ¿Por qué aprender WMS?
+
+En la industria moderna, la gestión eficiente del almacén puede representar 
+ahorros del 15-30% en costos operativos. Las empresas buscan profesionales 
+capacitados en estas herramientas.
+"""
+
+INFO_RECEPCION = """
+## 📥 Transacción: RECEPCIÓN (Inbound)
+
+La **recepcón** es el proceso de aceptar mercancía que ingresa al almacén 
+desde proveedores o centros de distribución.
+
+### Flujo de la Recepción:
+1. **Llegada del transporte** - El camión/vehículo llega al muelle
+2. **Verificación de documentación** - OC, factura, guía de remise
+3. **Inspección de cantidad** - Verificar unidades recibidas vs pedido
+4. **Inspección de calidad** - Revisar estados de los productos
+5. **Registro en sistema** - Ingresar datos al WMS
+6. **Ubicación** - Asignar ubicación en el almacén
+7. **Almacenaje** - Ubicar físicamente los productos
+
+### Conceptos clave:
+- **OC (Orden de Compra)** - Documento autorizado para compra
+- **Remise** - Guía del transportador
+- **Cantidad pedida vs recibida** - Puede haber diferencias
+- **Unidad de manejo** - Cómo se manipula (caja, pallet, unidad)
+"""
+
+INFO_DESPACHO = """
+## 🚚 Transacción: DESPACHO (Outbound)
+
+El **despacho** es el proceso de atender pedidos de clientes, 
+ya sea minoristas, mayoristas o consumidores finales.
+
+### Flujo del Despacho:
+1. **Recepción del pedido** - Orden del cliente
+2. **Verificación de disponibilidad** - Confirmar stock
+3. **Reserva** - Separar productos del pedido
+4. **Picking** - Recoger productos de ubicaciones
+5. **Packing** - Empaquetar para transporte
+6. **Documentación** - Generar guía de despacho
+7. **Carga** - Subir al vehículo de reparto
+8. **Entrega** - Delivery al cliente
+
+### Términos clave:
+- **Picking** - Recoger productos de estanterías
+- **Packing** - Empaquetar el pedido
+- **Orden de picking** - Lista de productos a recoger
+- **Cliente** - Puede ser interno o externo
+"""
+
+INFO_KPIS = """
+## 📊 Indicadores KPIs Logísticos
+
+Los **KPIs (Key Performance Indicators)** son métricas que permiten 
+medir la eficiencia y efectividad de las operaciones del almacén.
+
+### KPIs principales en un WMS:
+
+| KPI | Fórmula | Meta típica |
+|-----|---------|-------------|
+| **Exactitud de Inventario** | (Registros OK / Total) × 100 | > 98% |
+| **Pedidos Perfectos** | (Sin errores / Total pedidos) × 100 | > 95% |
+| **OTIF** | (Órdenes a tiempo y completas / Total) × 100 | > 95% |
+| **Rotación de Inventario** | Ventas / Inv. promedio | 4-12x/año |
+| **Costo por unidad almacenada** | Costo total / Unidades | Minimizar |
+| **Tiempo de ciclo de pedido** | Recepción → Envío | < 4 horas |
+
+### ¿Por qué son importantes?
+Los KPIs permiten:
+- Identificar problemas antes de que sean críticos
+- Medir el desempeño del personal
+- Justificar inversiones en mejoras
+- Compararse con estándares de la industria
+"""
 
 # ============================================================================
 # CONFIGURACIÓN DE LA PÁGINA
 # ============================================================================
 st.set_page_config(
-    page_title="WMS UPB - Sistema de Gestión de Almacenes",
+    page_title="WMS UPB - Laboratorio de Gestión de Almacenes",
     page_icon="🏭",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -33,7 +133,7 @@ DB_FILE = "wms_inventory.db"
 
 
 def init_database():
-    """Inicializa la base de datos SQLite con las tablas necesarias"""
+    """Inicializa la base de datos SQLite con datos de ejemplo para práctica"""
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
 
@@ -56,7 +156,7 @@ def init_database():
         )
     """)
 
-    # Tabla de ubicaciones
+    # Tabla de ubicaciones (sistema de coordenadas)
     c.execute("""
         CREATE TABLE IF NOT EXISTS ubicaciones (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -70,7 +170,7 @@ def init_database():
         )
     """)
 
-    # Tabla de movimientos
+    # Tabla de movimientos (histórico)
     c.execute("""
         CREATE TABLE IF NOT EXISTS movimientos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -81,11 +181,12 @@ def init_database():
             ubicacion_destino TEXT,
             usuario TEXT,
             fecha TEXT,
+            observaciones TEXT,
             FOREIGN KEY (producto_id) REFERENCES productos(id)
         )
     """)
 
-    # Insertar ubicaciones de ejemplo si no existen
+    # Insertar ubicaciones de ejemplo (Almacén pequeño)
     c.execute("SELECT COUNT(*) FROM ubicaciones")
     if c.fetchone()[0] == 0:
         zonas = ["A", "B", "C"]
@@ -236,15 +337,31 @@ def init_database():
         ]
         for p in productos_ejemplo:
             c.execute(
-                "INSERT INTO productos (sku, nombre, categoria, cantidad, unidad, peso, volumen, ubicacion, costo_unitario, proveedor, fecha_ingreso) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO productos (sku, nombre, categoria, cantidad, unidad, peso, volumen, ubicacion, costo_unitario, proveedor, fecha_ingreso) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 p,
+            )
+
+        c.execute("SELECT id FROM productos LIMIT 5")
+        producto_ids = [row[0] for row in c.fetchall()]
+        for i, pid in enumerate(producto_ids[:5]):
+            c.execute(
+                "INSERT INTO movimientos (tipo, producto_id, cantidad, ubicacion_origen, ubicacion_destino, usuario, fecha, observaciones) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    "entrada",
+                    pid,
+                    50,
+                    "Recepción",
+                    "A-01-01-01",
+                    "admin",
+                    "2025-01-10 08:00",
+                    "Recepción inicial",
+                ),
             )
 
     conn.commit()
     conn.close()
 
 
-# Inicializar base de datos
 init_database()
 
 
@@ -269,9 +386,18 @@ def get_ubicaciones():
     return df
 
 
-def get_movimientos():
+def get_movimientos(limit=100):
     conn = get_connection()
-    df = pd.read_sql("SELECT * FROM movimientos ORDER BY fecha DESC LIMIT 100", conn)
+    df = pd.read_sql(
+        f"SELECT * FROM movimientos ORDER BY fecha DESC LIMIT {limit}", conn
+    )
+    conn.close()
+    return df
+
+
+def get_ubicaciones_disponibles():
+    conn = get_connection()
+    df = pd.read_sql("SELECT * FROM ubicaciones WHERE estado = 'disponible'", conn)
     conn.close()
     return df
 
@@ -281,12 +407,11 @@ def agregar_producto(
 ):
     conn = get_connection()
     c = conn.cursor()
+    fecha_actual = datetime.now().strftime("%Y-%m-%d")
     try:
         c.execute(
-            """
-            INSERT INTO productos (sku, nombre, categoria, cantidad, unidad, peso, volumen, ubicacion, costo_unitario, proveedor, fecha_ingreso)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
+            """INSERT INTO productos (sku, nombre, categoria, cantidad, unidad, peso, volumen, ubicacion, costo_unitario, proveedor, fecha_ingreso) 
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 sku,
                 nombre,
@@ -298,96 +423,222 @@ def agregar_producto(
                 ubicacion,
                 costo,
                 proveedor,
-                datetime.now().strftime("%Y-%m-%d"),
+                fecha_actual,
             ),
         )
         conn.commit()
         return True, "Producto agregado correctamente"
     except sqlite3.IntegrityError:
-        return False, "El SKU ya existe"
+        return False, "El SKU ya existe. Use otro código."
     finally:
         conn.close()
 
 
-def actualizar_inventario(producto_id, nueva_cantidad):
+def registrar_recepcion(
+    sku, cantidad, proveedor, orden_compra, ubicacion, observaciones
+):
     conn = get_connection()
     c = conn.cursor()
-    c.execute(
-        "UPDATE productos SET cantidad = ? WHERE id = ?", (nueva_cantidad, producto_id)
-    )
-    conn.commit()
-    conn.close()
+    try:
+        c.execute("SELECT id, cantidad, ubicacion FROM productos WHERE sku = ?", (sku,))
+        result = c.fetchone()
+
+        if result:
+            producto_id, cantidad_actual, ubicacion_actual = result
+            nueva_cantidad = cantidad_actual + cantidad
+            c.execute(
+                "UPDATE productos SET cantidad = ? WHERE id = ?",
+                (nueva_cantidad, producto_id),
+            )
+        else:
+            return False, f"Producto {sku} no encontrado."
+
+        fecha_actual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        c.execute(
+            "INSERT INTO movimientos (tipo, producto_id, cantidad, ubicacion_origen, ubicacion_destino, usuario, fecha, observaciones) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                "entrada",
+                producto_id,
+                cantidad,
+                "Recepción",
+                ubicacion,
+                "admin",
+                fecha_actual,
+                f"OC: {orden_compra} - {observaciones}",
+            ),
+        )
+
+        if ubicacion:
+            c.execute(
+                "UPDATE ubicaciones SET estado = 'ocupada' WHERE codigo = ?",
+                (ubicacion,),
+            )
+
+        conn.commit()
+        return True, f"Recepción registrada: {cantidad} unidades de {sku}"
+    except Exception as e:
+        return False, str(e)
+    finally:
+        conn.close()
 
 
-def registrar_movimiento(tipo, producto_id, cantidad, origen, destino):
+def registrar_despacho(sku, cantidad, cliente, numero_pedido, observaciones):
     conn = get_connection()
     c = conn.cursor()
-    c.execute(
-        """
-        INSERT INTO movimientos (tipo, producto_id, cantidad, ubicacion_origen, ubicacion_destino, usuario, fecha)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    """,
-        (
-            tipo,
-            producto_id,
-            cantidad,
-            origen,
-            destino,
-            "admin",
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        ),
-    )
-    conn.commit()
-    conn.close()
+    try:
+        c.execute("SELECT id, cantidad, ubicacion FROM productos WHERE sku = ?", (sku,))
+        result = c.fetchone()
+
+        if not result:
+            return False, f"Producto {sku} no encontrado"
+
+        producto_id, cantidad_actual, ubicacion = result
+
+        if cantidad_actual < cantidad:
+            return (
+                False,
+                f"Stock insuficiente. Disponible: {cantidad_actual}, Solicitado: {cantidad}",
+            )
+
+        nueva_cantidad = cantidad_actual - cantidad
+        c.execute(
+            "UPDATE productos SET cantidad = ? WHERE id = ?",
+            (nueva_cantidad, producto_id),
+        )
+
+        fecha_actual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        c.execute(
+            "INSERT INTO movimientos (tipo, producto_id, cantidad, ubicacion_origen, ubicacion_destino, usuario, fecha, observaciones) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                "salida",
+                producto_id,
+                cantidad,
+                ubicacion,
+                "Despacho",
+                "admin",
+                fecha_actual,
+                f"Pedido: {numero_pedido} - Cliente: {cliente}",
+            ),
+        )
+
+        if nueva_cantidad == 0:
+            c.execute(
+                "UPDATE ubicaciones SET estado = 'disponible' WHERE codigo = ?",
+                (ubicacion,),
+            )
+
+        conn.commit()
+        return True, f"Despacho registrado: {cantidad} unidades de {sku} para {cliente}"
+    except Exception as e:
+        return False, str(e)
+    finally:
+        conn.close()
+
+
+def calcular_espacios(ancho, largo, alto, num_sku, stock_promedio, altura_estanteria):
+    volumen_producto = ancho * largo * alto
+    total_unidades = num_sku * stock_promedio
+    volumen_total = volumen_producto * total_unidades
+    area_util = volumen_total / altura_estanteria if altura_estanteria > 0 else 0
+    area_total = area_util / 0.4 if area_util > 0 else 0
+    return {
+        "volumen_unitario": volumen_producto,
+        "volumen_total": volumen_total,
+        "area_util": area_util,
+        "area_total": area_total,
+        "total_unidades": total_unidades,
+    }
 
 
 # ============================================================================
-# PÁGINA: DASHBOARD PRINCIPAL
+# PÁGINA: HOME
+# ============================================================================
+def show_home():
+    st.title("🏭 WMS UPB - Laboratorio de Gestión de Almacenes")
+    st.markdown("### Universidad Pontificia Boliviana - Ingeniería Industrial")
+    st.markdown("---")
+
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        st.markdown("""
+        ## Bienvenido al Laboratorio WMS
+
+        Este sistema es una herramienta educativa para aprender los conceptos 
+        fundamentales de la gestión de almacenes a través de la práctica.
+
+        ### ¿Qué puedes hacer aquí?
+
+        1. 📊 **Dashboard** - Ver métricas en tiempo real
+        2. 📦 **Inventario** - Gestionar productos
+        3. 📍 **Ubicaciones** - Visualizar el mapa del almacén
+        4. 🔄 **Movimientos** - Ver histórico de operaciones
+        5. 📥 **Recepción** - Simular ingresos de mercancía
+        6. 🚚 **Despacho** - Simular salidas de mercancía
+        7. 📐 **Calculadora** - Proyectar capacidad
+        8. 📊 **KPIs** - Aprender métricas logísticas
+        """)
+        st.info("💡 **Consejo:** Usa la barra lateral para navegar entre los módulos.")
+
+    with col2:
+        st.markdown("### Estado del Sistema")
+        productos = get_productos()
+        ubicaciones = get_ubicaciones()
+        movimientos = get_movimientos(10)
+        st.metric("Productos (SKUs)", len(productos))
+        st.metric("Unidades Totales", productos["cantidad"].sum())
+        st.metric("Ubicaciones", len(ubicaciones))
+        st.metric("Movimientos", len(movimientos))
+
+    st.markdown("---")
+
+    with st.expander("📚 ¿Qué es un WMS?"):
+        st.markdown(INFO_WMS)
+
+
+# ============================================================================
+# DASHBOARD
 # ============================================================================
 def show_dashboard():
-    st.title("🏭 Dashboard - WMS UPB")
-    st.markdown(
-        "### Sistema de Gestión de Almacenes - Universidad Pontificia Boliviana"
-    )
+    st.title("📊 Dashboard - Vista General")
+    st.markdown("Métricas en tiempo real del sistema.")
 
-    # Obtener datos
     productos = get_productos()
     ubicaciones = get_ubicaciones()
-    movimientos = get_movimientos()
+    movimientos = get_movimientos(50)
 
-    # Métricas principales
+    st.subheader("📈 Indicadores Actuales")
     col1, col2, col3, col4 = st.columns(4)
 
+    total_unidades = productos["cantidad"].sum()
+    valor_total = (productos["cantidad"] * productos["costo_unitario"]).sum()
+    ubicaciones_ocupadas = len(
+        productos[productos["ubicacion"].notna()]["ubicacion"].unique()
+    )
+
     with col1:
-        st.metric("Total SKUs", len(productos), "productos")
+        st.metric("Total SKUs", len(productos))
     with col2:
-        total_unidades = productos["cantidad"].sum()
         st.metric("Unidades en Stock", f"{total_unidades:,}")
     with col3:
-        valor_total = (productos["cantidad"] * productos["costo_unitario"]).sum()
-        st.metric("Valor Inventario", f"${valor_total:,.0f}")
+        st.metric("Valor del Inventario", f"${valor_total:,.0f}")
     with col4:
-        ubicaciones_usadas = len(
-            productos[productos["ubicacion"].notna()]["ubicacion"].unique()
-        )
-        st.metric("Ubicaciones Usadas", ubicaciones_usadas)
+        st.metric("Ubicaciones Usadas", ubicaciones_ocupadas)
 
     st.divider()
 
-    # Gráficos
     col1, col2 = st.columns(2)
 
     with col1:
-        st.subheader("📦 Inventario por Categoría")
+        st.subheader("📦 Distribución por Categoría")
         if len(productos) > 0:
-            fig_categoria = px.pie(
+            fig_cat = px.pie(
                 productos,
                 values="cantidad",
                 names="categoria",
-                title="Distribución de unidades por categoría",
+                title="Unidades por categoría",
                 color_discrete_sequence=px.colors.sequential.Blues_r,
             )
-            st.plotly_chart(fig_categoria, use_container_width=True)
+            st.plotly_chart(fig_cat, use_container_width=True)
 
     with col2:
         st.subheader("💰 Valor por Categoría")
@@ -402,13 +653,14 @@ def show_dashboard():
                 valor_cat,
                 x="categoria",
                 y="valor_total",
-                title="Valor del inventario por categoría",
+                title="Valor monetario por categoría",
                 color="categoria",
                 color_discrete_sequence=px.colors.sequential.Blues_r,
             )
             st.plotly_chart(fig_valor, use_container_width=True)
 
-    # Tabla de productos con métricas
+    st.divider()
+
     st.subheader("📋 Inventario Actual")
     if len(productos) > 0:
         productos["valor_total"] = productos["cantidad"] * productos["costo_unitario"]
@@ -430,46 +682,68 @@ def show_dashboard():
 
 
 # ============================================================================
-# PÁGINA: GESTIÓN DE PRODUCTOS
+# GESTIÓN DE PRODUCTOS
 # ============================================================================
 def show_productos():
     st.title("📦 Gestión de Productos")
+    st.markdown("Administra el catálogo de productos.")
 
-    tab1, tab2 = st.tabs(["Inventario", "Agregar Producto"])
+    tab1, tab2 = st.tabs(["📋 Ver Inventario", "➕ Agregar Producto"])
 
     with tab1:
         productos = get_productos()
-        st.dataframe(productos, use_container_width=True, hide_index=True)
+        col1, col2 = st.columns(2)
+        with col1:
+            cat_filter = st.selectbox(
+                "Filtrar por categoría",
+                ["Todas"] + list(productos["categoria"].unique()),
+            )
+        with col2:
+            busqueda = st.text_input("Buscar por SKU o nombre", "")
+
+        df_filtered = productos.copy()
+        if cat_filter != "Todas":
+            df_filtered = df_filtered[df_filtered["categoria"] == cat_filter]
+        if busqueda:
+            df_filtered = df_filtered[
+                df_filtered["sku"].str.contains(busqueda, case=False)
+                | df_filtered["nombre"].str.contains(busqueda, case=False)
+            ]
+
+        st.dataframe(df_filtered, use_container_width=True, hide_index=True)
+        st.info(f"Mostrando {len(df_filtered)} de {len(productos)} productos")
 
     with tab2:
-        st.subheader("Agregar Nuevo Producto")
+        st.markdown("### Nuevo Producto")
         with st.form("nuevo_producto"):
             col1, col2 = st.columns(2)
             with col1:
-                sku = st.text_input("SKU *", placeholder="SKU-XXX")
+                sku = st.text_input("SKU *", placeholder="SKU-001")
                 nombre = st.text_input("Nombre *", placeholder="Nombre del producto")
                 categoria = st.selectbox(
                     "Categoría",
                     ["Electrónica", "Accesorios", "Mobiliario", "Suministros", "Otro"],
                 )
-                cantidad = st.number_input("Cantidad", min_value=0, value=0)
+                cantidad = st.number_input("Cantidad inicial", min_value=0, value=0)
             with col2:
                 unidad = st.selectbox(
                     "Unidad", ["und", "kg", "caja", "pallet", "metro"]
                 )
                 peso = st.number_input("Peso unitario (kg)", min_value=0.0, value=0.0)
-                volumen = st.number_input(
-                    "Volumen unitario (m³)", min_value=0.0, value=0.0
-                )
+                volumen = st.number_input("Volumen (m³)", min_value=0.0, value=0.0)
                 costo = st.number_input("Costo unitario ($)", min_value=0, value=0)
 
-            ubicacion = st.selectbox("Ubicación", get_ubicaciones()["codigo"].tolist())
+            ubicacion = st.selectbox(
+                "Ubicación inicial",
+                ["Sin asignar"] + get_ubicaciones()["codigo"].tolist(),
+            )
             proveedor = st.text_input("Proveedor", placeholder="Nombre del proveedor")
 
             submit = st.form_submit_button("💾 Guardar Producto")
 
             if submit:
                 if sku and nombre:
+                    ubicacion_final = None if ubicacion == "Sin asignar" else ubicacion
                     success, msg = agregar_producto(
                         sku,
                         nombre,
@@ -478,38 +752,35 @@ def show_productos():
                         unidad,
                         peso,
                         volumen,
-                        ubicacion,
+                        ubicacion_final,
                         costo,
                         proveedor,
                     )
                     if success:
                         st.success(msg)
+                        st.balloons()
                     else:
                         st.error(msg)
-                else:
-                    st.warning("SKU y Nombre son obligatorios")
 
 
 # ============================================================================
-# PÁGINA: GESTIÓN DE UBICACIONES
+# UBICACIONES
 # ============================================================================
 def show_ubicaciones():
-    st.title("📍 Gestión de Ubicaciones")
+    st.title("📍 Mapa del Almacén")
+    st.markdown("Visualiza las ubicaciones disponibles.")
 
     ubicaciones = get_ubicaciones()
     productos = get_productos()
 
-    # Mapa de ocupaciones
-    ubicaciones_ocupadas = (
-        productos[productos["ubicacion"].notna()]
+    ocupaciones = (
+        productos[productos["ubicacion"].notna()][["ubicacion", "nombre", "cantidad"]]
         .groupby("ubicacion")
-        .size()
+        .agg({"nombre": "first", "cantidad": "sum"})
         .reset_index()
     )
-    ubicaciones_ocupadas.columns = ["codigo", "productos"]
 
-    # Métricas
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric("Total Ubicaciones", len(ubicaciones))
     with col2:
@@ -518,186 +789,257 @@ def show_ubicaciones():
     with col3:
         ocup = len(ubicaciones[ubicaciones["estado"] == "ocupada"])
         st.metric("Ocupadas", ocup)
+    with col4:
+        ocup_pct = (ocup / len(ubicaciones) * 100) if len(ubicaciones) > 0 else 0
+        st.metric("% Ocupación", f"{ocup_pct:.1f}%")
 
-    # Visualización del almacén
-    st.subheader("🏭 Visualización del Almacén")
+    st.divider()
+
+    with st.expander("💡 ¿Cómo se lee el código de ubicación?"):
+        st.markdown("""
+        El código **A-01-02-03** significa:
+        - **A**: Zona (A, B, o C)
+        - **01**: Pasillo número 1
+        - **02**: Estante número 2  
+        - **03**: Nivel número 3
+        """)
+
+    st.subheader("🏭 Distribución del Almacén")
 
     for zona in ["A", "B", "C"]:
-        st.markdown(f"### Zona {zona}")
         zona_data = ubicaciones[ubicaciones["zona"] == zona].sort_values(
             ["pasillo", "estante", "nivel"]
         )
+        st.markdown(f"### Zona {zona}")
 
-        cols = st.columns(3)
+        cols = st.columns(4)
         for idx, row in zona_data.iterrows():
-            col_idx = int(row["pasillo"]) % 3
-            estado = "🟢" if row["estado"] == "disponible" else "🔴"
+            col_idx = (int(row["pasillo"]) - 1) % 4
+            prod_info = ocupaciones[ocupaciones["ubicacion"] == row["codigo"]]
+            if len(prod_info) > 0:
+                estado_icon = "🔴"
+                estado = f"Ocupado: {prod_info['nombre'].values[0]}"
+            else:
+                estado_icon = "🟢"
+                estado = "Disponible"
+
             with cols[col_idx]:
-                with st.expander(f"{estado} {row['codigo']}"):
-                    st.write(f"**Pasillo:** {row['pasillo']}")
-                    st.write(f"**Estante:** {row['estante']}")
-                    st.write(f"**Nivel:** {row['nivel']}")
-                    st.write(f"**Capacidad:** {row['capacidad']} unidades")
-                    st.write(f"**Estado:** {row['estado']}")
+                color = "red" if "Ocupado" in estado else "green"
+                st.markdown(
+                    f"<div style='padding: 5px; border: 1px solid {color}; border-radius: 5px; text-align: center; margin: 2px;'><b>{estado_icon} {row['codigo']}</b><br><small>{estado}</small></div>",
+                    unsafe_allow_html=True,
+                )
 
     st.divider()
-    st.subheader("Lista de Ubicaciones")
+    st.subheader("📋 Lista de Ubicaciones")
     st.dataframe(ubicaciones, use_container_width=True, hide_index=True)
 
 
 # ============================================================================
-# PÁGINA: MOVIMIENTOS
+# MOVIMIENTOS
 # ============================================================================
 def show_movimientos():
-    st.title("🔄 Movimientos de Inventario")
+    st.title("🔄 Historial de Movimientos")
+    st.markdown("Registro histórico de todas las operaciones.")
 
-    movimientos = get_movimientos()
+    movimientos = get_movimientos(200)
     productos = get_productos()
 
-    if len(movimientos) > 0:
-        # Unir con nombres de productos
-        movimientos = movimientos.merge(
-            productos[["id", "nombre", "sku"]],
-            left_on="producto_id",
-            right_on="id",
-            how="left",
-        )
+    if len(movimientos) == 0:
+        st.info("No hay movimientos registrados.")
+        return
 
-        # Gráfico de movimientos
-        st.subheader("📈 Registro de Movimientos")
-        st.dataframe(
-            movimientos[
-                [
-                    "fecha",
-                    "tipo",
-                    "sku",
-                    "nombre",
-                    "cantidad",
-                    "ubicacion_origen",
-                    "ubicacion_destino",
-                ]
-            ],
-            use_container_width=True,
-            hide_index=True,
-        )
-    else:
-        st.info("No hay movimientos registrados. ¡Registra una recepción o despacho!")
+    movimientos = movimientos.merge(
+        productos[["id", "nombre", "sku"]],
+        left_on="producto_id",
+        right_on="id",
+        how="left",
+    )
 
+    col1, col2 = st.columns(2)
+    entradas = len(movimientos[movimientos["tipo"] == "entrada"])
+    salidas = len(movimientos[movimientos["tipo"] == "salida"])
+    with col1:
+        st.metric("Total Entradas", entradas, "📥")
+    with col2:
+        st.metric("Total Salidas", salidas, "📤")
 
-# ============================================================================
-# PÁGINA: SIMULADOR DE RECEPCIÓN
-# ============================================================================
-def show_recepcion():
-    st.title("📥 Simulador de Recepción")
-    st.markdown("Practica el proceso de recepción de mercancía")
+    st.divider()
 
-    productos = get_productos()
-    ubicaciones = get_ubicaciones()
-
-    with st.form("recepcion_form"):
-        st.subheader("Datos del producto a recibir")
-
-        col1, col2 = st.columns(2)
-        with col1:
-            sku = st.text_input("SKU del producto", placeholder="SKU-XXX")
-            cantidad = st.number_input("Cantidad a recibir", min_value=1, value=1)
-        with col2:
-            proveedor = st.text_input("Proveedor", placeholder="Nombre del proveedor")
-            orden_compra = st.text_input("Órden de Compra", placeholder="OC-XXXXX")
-
-        st.subheader("Ubicación en almacén")
-        ubicacion = st.selectbox(
-            "Seleccionar ubicación", ubicaciones["codigo"].tolist()
-        )
-
-        observaciones = st.text_area(
-            "Observaciones", placeholder="Estado del producto, daños, etc."
-        )
-
-        submit = st.form_submit_button("✅ Confirmar Recepción")
-
-        if submit:
-            st.success(
-                f"Recepción confirmada: {cantidad} unidades de {sku} recibidas en {ubicacion}"
-            )
-            st.balloons()
-
-
-# ============================================================================
-# PÁGINA: SIMULADOR DE DESPACHO
-# ============================================================================
-def show_despacho():
-    st.title("🚚 Simulador de Despacho")
-    st.markdown("Practica el proceso de despacho de mercancía")
-
-    productos = get_productos()
-
-    # Ver productos disponibles
-    st.subheader("Productos Disponibles")
+    st.subheader("📋 Últimos Movimientos")
     st.dataframe(
-        productos[["sku", "nombre", "cantidad", "ubicacion"]].style.format(
-            {"cantidad": "{:d}"}
-        ),
+        movimientos[
+            [
+                "fecha",
+                "tipo",
+                "sku",
+                "nombre",
+                "cantidad",
+                "ubicacion_destino",
+                "observaciones",
+            ]
+        ].head(50),
         use_container_width=True,
         hide_index=True,
     )
 
+
+# ============================================================================
+# SIMULADOR DE RECEPCIÓN
+# ============================================================================
+def show_recepcion():
+    st.title("📥 Simulador de Recepción")
+    st.markdown("Practica el proceso de recibir mercancía.")
+
+    with st.expander("📖 Aprender: Proceso de Recepción"):
+        st.markdown(INFO_RECEPCION)
+
+    productos = get_productos()
+    ubicaciones = get_ubicaciones_disponibles()
+
     st.divider()
+    st.subheader("📝 Registrar Recepción")
 
-    with st.form("despacho_form"):
-        st.subheader("Datos del despacho")
-
+    with st.form("recepcion_form"):
         col1, col2 = st.columns(2)
         with col1:
-            sku_seleccionar = st.selectbox("Seleccionar SKU", productos["sku"].tolist())
-            cantidad_despachar = st.number_input(
-                "Cantidad a despachar", min_value=1, value=1
+            sku = st.selectbox(
+                "Seleccionar SKU",
+                productos["sku"].tolist(),
+                format_func=lambda x: (
+                    f"{x} - {productos[productos['sku'] == x]['nombre'].values[0]}"
+                ),
+            )
+            cantidad = st.number_input("Cantidad a recibir", min_value=1, value=10)
+            proveedor = st.text_input("Proveedor", placeholder="Nombre del proveedor")
+        with col2:
+            orden_compra = st.text_input(
+                "Orden de Compra (OC)", placeholder="OC-2024-0001"
+            )
+            ubicacion = st.selectbox(
+                "Ubicación en almacén", ["Seleccionar"] + ubicaciones["codigo"].tolist()
+            )
+            observaciones = st.text_area(
+                "Observaciones", placeholder="Estado, daños..."
+            )
+
+        submit = st.form_submit_button("✅ Confirmar Recepción")
+
+        if submit:
+            if sku and cantidad > 0 and ubicacion != "Seleccionar":
+                success, msg = registrar_recepcion(
+                    sku, cantidad, proveedor, orden_compra, ubicacion, observaciones
+                )
+                if success:
+                    st.success(msg)
+                    st.balloons()
+                else:
+                    st.error(msg)
+
+    st.divider()
+    st.subheader("📦 Productos en Inventario")
+    st.dataframe(
+        productos[["sku", "nombre", "cantidad", "ubicacion"]],
+        use_container_width=True,
+        hide_index=True,
+    )
+
+
+# ============================================================================
+# SIMULADOR DE DESPACHO
+# ============================================================================
+def show_despacho():
+    st.title("🚚 Simulador de Despacho")
+    st.markdown("Practica el proceso de atender pedidos.")
+
+    with st.expander("📖 Aprender: Proceso de Despacho"):
+        st.markdown(INFO_DESPACHO)
+
+    productos = get_productos()
+    st.divider()
+
+    st.subheader("📦 Productos Disponibles")
+    disponibles = productos[productos["cantidad"] > 0][
+        ["sku", "nombre", "cantidad", "ubicacion"]
+    ]
+
+    if len(disponibles) == 0:
+        st.warning("No hay productos disponibles.")
+    else:
+        st.dataframe(disponibles, use_container_width=True, hide_index=True)
+
+    st.divider()
+    st.subheader("🚚 Registrar Despacho")
+
+    with st.form("despacho_form"):
+        col1, col2 = st.columns(2)
+        with col1:
+            sku = st.selectbox(
+                "Seleccionar SKU",
+                productos[productos["cantidad"] > 0]["sku"].tolist(),
+                format_func=lambda x: (
+                    f"{x} - {productos[productos['sku'] == x]['nombre'].values[0]}"
+                ),
+            )
+            cant_disp = productos[productos["sku"] == sku]["cantidad"].values[0]
+            st.caption(f"Disponible: {cant_disp} unidades")
+            cantidad = st.number_input(
+                "Cantidad a despachar",
+                min_value=1,
+                max_value=cant_disp,
+                value=min(1, cant_disp),
             )
         with col2:
             cliente = st.text_input("Cliente", placeholder="Nombre del cliente")
-            numero_pedido = st.text_input("Número de Pedido", placeholder="PED-XXXXX")
-
-        transporte = st.selectbox(
-            "Transporte",
-            [
-                "Camión propio",
-                "Transportadora externa",
-                "Mensajería",
-                "Recoge en tienda",
-            ],
-        )
+            numero_pedido = st.text_input(
+                "Número de Pedido", placeholder="PED-2024-0001"
+            )
+            observaciones = st.text_area(
+                "Instrucciones", placeholder="Notas de entrega..."
+            )
 
         submit = st.form_submit_button("🚚 Confirmar Despacho")
 
-        if submit:
-            producto = productos[productos["sku"] == sku_seleccionar].iloc[0]
-            if cantidad_despachar <= producto["cantidad"]:
-                st.success(
-                    f"Despacho confirmado: {cantidad_despachar} unidades de {producto['nombre']} para {cliente}"
-                )
+        if submit and cantidad > 0 and sku:
+            success, msg = registrar_despacho(
+                sku, cantidad, cliente, numero_pedido, observaciones
+            )
+            if success:
+                st.success(msg)
                 st.balloons()
             else:
-                st.error(f"Stock insuficiente. Disponible: {producto['cantidad']}")
+                st.error(msg)
 
 
 # ============================================================================
-# PÁGINA: CALCULADORA DE ESPACIOS
+# CALCULADORA DE ESPACIOS
 # ============================================================================
 def show_calculadora_espacios():
     st.title("📐 Calculadora de Espacios")
-    st.markdown("Calcula la capacidad necesaria para tu almacén")
+    st.markdown("Calcula la capacidad necesaria para tu almacén.")
+
+    with st.expander("📖 Aprender: Cálculo de Espacios"):
+        st.markdown("""
+        ## Cálculo de Espacio en Almacén
+
+        1. **Volumen del producto** = largo × ancho × alto
+        2. **Stock total** = SKUs × stock promedio por SKU
+        3. **Volumen total** = Volumen producto × Stock total
+        4. **Área útil** = Volumen total / Altura de estanterías
+        5. **Área total** = Área útil / 0.4 (60% son pasillos)
+        """)
 
     col1, col2 = st.columns(2)
 
     with col1:
-        st.subheader("Dimensiones del Producto")
-        ancho_producto = st.number_input("Ancho (m)", min_value=0.1, value=0.6)
-        largo_producto = st.number_input("Largo (m)", min_value=0.1, value=0.8)
-        alto_producto = st.number_input("Alto (m)", min_value=0.1, value=1.5)
+        st.subheader("📦 Dimensiones del Producto")
+        ancho = st.number_input("Ancho (m)", min_value=0.1, value=0.6)
+        largo = st.number_input("Largo (m)", min_value=0.1, value=0.8)
+        alto = st.number_input("Alto (m)", min_value=0.1, value=1.5)
 
     with col2:
-        st.subheader("Parámetros del Almacén")
-        num_sku = st.number_input("Número de SKUs diferentes", min_value=1, value=100)
+        st.subheader("🏭 Parámetros del Almacén")
+        num_sku = st.number_input("SKUs diferentes", min_value=1, value=100)
         stock_promedio = st.number_input(
             "Stock promedio por SKU", min_value=1, value=50
         )
@@ -705,131 +1047,139 @@ def show_calculadora_espacios():
             "Altura de estanterías (m)", min_value=1.0, value=8.0
         )
 
-    if st.button("Calcular"):
-        # Cálculos
-        volumen_producto = ancho_producto * largo_producto * alto_producto
-        total_unidades = num_sku * stock_promedio
-        volumen_total = volumen_producto * total_unidades
+    calcular = st.button("🔢 Calcular Espacio Necesario")
 
-        # Asumiendo eficiencia del 40% (60% es pasillo)
-        area_util = volumen_total / altura_estanteria
-        area_total = area_util / 0.4
+    if calcular:
+        resultados = calcular_espacios(
+            ancho, largo, alto, num_sku, stock_promedio, altura_estanteria
+        )
 
         st.divider()
+        st.subheader("📊 Resultados")
 
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.metric("Volumen por unidad", f"{volumen_producto:.3f} m³")
+            st.metric("Volumen por unidad", f"{resultados['volumen_unitario']:.3f} m³")
         with col2:
-            st.metric("Volumen total necesario", f"{volumen_total:.1f} m³")
+            st.metric(
+                "Volumen total productos", f"{resultados['volumen_total']:.1f} m³"
+            )
         with col3:
-            st.metric("Área del almacén", f"{area_total:.1f} m²")
+            st.metric("Total unidades", f"{resultados['total_unidades']:,}")
+
+        st.divider()
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Área útil necesaria", f"{resultados['area_util']:.1f} m²")
+        with col2:
+            st.metric("Área total del almacén", f"{resultados['area_total']:.1f} m²")
 
         st.success(
-            f"Para almacenar {total_unidades:,} unidades con {num_sku} SKUs diferentes, necesitas aproximadamente {area_total:.1f} m² de área de almacenamiento"
+            f"Para almacenar {resultados['total_unidades']:,} unidades de {num_sku} SKUs, necesitas aproximadamente **{resultados['area_total']:.0f} m²** de área de almacén."
         )
 
 
 # ============================================================================
-# PÁGINA: KPIs LOGÍSTICOS
+# KPIs LOGÍSTICOS
 # ============================================================================
 def show_kpis():
     st.title("📊 Indicadores KPIs Logísticos")
-    st.markdown("Métricas clave para la gestión de almacenes")
+    st.markdown("Aprende los métricas principales de gestión de almacenes.")
+
+    with st.expander("📖 Aprender: ¿Qué son los KPIs?"):
+        st.markdown(INFO_KPIS)
 
     productos = get_productos()
-    movimientos = get_movimientos()
+    movimientos = get_movimientos(100)
     ubicaciones = get_ubicaciones()
 
-    # Calcular KPIs
     total_sku = len(productos)
     total_unidades = productos["cantidad"].sum()
     valor_inventario = (productos["cantidad"] * productos["costo_unitario"]).sum()
+    ocup_count = len(productos[productos["ubicacion"].notna()]["ubicacion"].unique())
 
-    ubicaciones_ocupadas = len(
-        productos[productos["ubicacion"].notna()]["ubicacion"].unique()
-    )
-    capacidad_usada = (ubicaciones_ocupadas / len(ubicaciones)) * 100
-
-    # KPI Cards
-    st.subheader("KPIs Principal")
+    st.subheader("📈 KPIs Principales del Almacén")
 
     col1, col2, col3, col4 = st.columns(4)
+
+    accuracy = 98.5
+    pedidos_perfectos = 96.2
+    otif = 94.8
+    rotacion = 4.2
+
     with col1:
-        st.metric("Exactitud de Inventario", "98.5%", "+0.5%")
+        st.metric("Exactitud de Inventario", f"{accuracy}%", "+0.5%")
     with col2:
-        st.metric("Tasa de Pedidos Perfectos", "96.2%", "-1.2%")
+        st.metric("Pedidos Perfectos", f"{pedidos_perfectos}%", "-1.2%")
     with col3:
-        st.metric("OTIF (On Time In Full)", "94.8%", "+2.1%")
+        st.metric("OTIF", f"{otif}%", "+2.1%")
     with col4:
-        st.metric("Rotación de Inventario", "4.2x", "+0.3x")
+        st.metric("Rotación", f"{rotacion}x", "+0.3x")
 
     st.divider()
 
-    # Gráfico de KPIs
-    st.subheader("📈 Tendencias")
+    st.subheader("📐 Definiciones y Fórmulas")
+
+    kpis_def = [
+        (
+            "Exactitud de Inventario (Accuracy)",
+            "(Registros OK / Total) × 100",
+            "Mide cuánto coincide el inventario en sistema vs el físico.",
+        ),
+        (
+            "Pedidos Perfectos (Perfect Order Rate)",
+            "(Pedidos sin errores / Total pedidos) × 100",
+            "Porcentaje de pedidos sin problemas.",
+        ),
+        (
+            "OTIF (On Time In Full)",
+            "(Órdenes a tiempo y completas / Total) × 100",
+            "El cliente recibe lo que pidió, cuando lo pidió.",
+        ),
+        (
+            "Rotación de Inventario",
+            "Ventas / Inventario promedio",
+            "Cuántas veces al año se renueva el inventario.",
+        ),
+    ]
+
+    for nombre, formula, desc in kpis_def:
+        with st.expander(f"📊 {nombre}"):
+            st.markdown(f"**Fórmula:** `{formula}`")
+            st.markdown(f"**Qué mide:** {desc}")
+
+    st.divider()
+    st.subheader("📈 Tendencias (Datos Simulados)")
 
     kpis_data = {
         "Mes": ["Ene", "Feb", "Mar", "Abr", "May", "Jun"],
-        "Accuracy": [96, 97, 97.5, 98, 98.2, 98.5],
-        "OTIF": [91, 92, 93, 94, 94.5, 94.8],
-        "Pedidos Perfectos": [94, 95, 95.5, 96, 96.1, 96.2],
+        "Accuracy": [96.0, 96.5, 97.0, 97.5, 98.0],
+        "Pedidos Perfectos": [94.0, 94.5, 95.0, 95.5, 96.0],
+        "OTIF": [91.0, 92.0, 92.5, 93.5, 94.0],
     }
     df_kpis = pd.DataFrame(kpis_data)
 
     fig = px.line(
         df_kpis,
         x="Mes",
-        y=["Accuracy", "OTIF", "Pedidos Perfectos"],
+        y=["Accuracy", "Pedidos Perfectos", "OTIF"],
         title="Evolución de KPIs",
         color_discrete_sequence=px.colors.sequential.Blues_r,
     )
     st.plotly_chart(fig, use_container_width=True)
 
-    # Definiciones de KPIs
-    st.divider()
-    st.subheader("📖 Definiciones")
-
-    kpis_def = [
-        (
-            "Exactitud de Inventario",
-            "(Ítems correctos / Total ítems) × 100",
-            "Mide la confiabilidad del registro vs la realidad física",
-        ),
-        (
-            "Pedidos Perfectos",
-            "(Pedidos sin errores / Total pedidos) × 100",
-            "Porcentaje de pedidos entregados sin incidencias",
-        ),
-        (
-            "OTIF",
-            "(Órdenes a tiempo y completas / Total) × 100",
-            "Nivel de servicio al cliente",
-        ),
-        (
-            "Rotación de Inventario",
-            "Costo ventas / Inventario promedio",
-            "Veces que se renueva el inventario al año",
-        ),
-    ]
-
-    for nombre, formula, desc in kpis_def:
-        with st.expander(nombre):
-            st.write(f"**Fórmula:** {formula}")
-            st.write(f"**Descripción:** {desc}")
-
 
 # ============================================================================
-# BARRA LATERAL - NAVEGACIÓN
+# BARRA LATERAL
 # ============================================================================
 def main():
-    # Sidebar
     st.sidebar.title("🏭 WMS UPB")
-    st.sidebar.image("https://www.upb.edu.co/images/logo-upb.png", width=150)
+    st.sidebar.markdown("### Laboratorio Educativo")
     st.sidebar.divider()
 
-    # Menú de navegación
     menu = [
+        "🏠 Inicio",
         "📊 Dashboard",
         "📦 Productos",
         "📍 Ubicaciones",
@@ -842,16 +1192,19 @@ def main():
 
     choice = st.sidebar.radio("Navegación", menu)
 
-    # Información del curso
     st.sidebar.divider()
-    st.sidebar.info("""
-    **Curso:** Gestión de Almacenamiento  
-    **Programa:** Ingeniería Industrial UPB  
-    **Instructor:** Ing. Cristian Javier Cano Mogollon
+    st.sidebar.markdown("""
+    ### 📚 Curso
+    **Gestión de Almacenamiento**
+    
+    **Programa:** Ingeniería Industrial
+    
+    **Profesor:** Ing. Cristian Javier Cano Mogollon
     """)
 
-    # Ejecutar la página seleccionada
-    if choice == "📊 Dashboard":
+    if choice == "🏠 Inicio":
+        show_home()
+    elif choice == "📊 Dashboard":
         show_dashboard()
     elif choice == "📦 Productos":
         show_productos()
