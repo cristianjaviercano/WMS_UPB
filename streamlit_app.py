@@ -129,7 +129,11 @@ st.set_page_config(
 # ============================================================================
 # BASE DE DATOS - INICIALIZACIÓN
 # ============================================================================
-DB_FILE = "wms_inventory.db"
+# Usar la carpeta temporal en producción (como Streamlit Cloud) para garantizar permisos de escritura
+if os.environ.get("STREAMLIT_SHARING_MODE") or os.path.exists("/mount/src"):
+    DB_FILE = "/tmp/wms_inventory.db"
+else:
+    DB_FILE = "wms_inventory.db"
 
 
 def init_database():
